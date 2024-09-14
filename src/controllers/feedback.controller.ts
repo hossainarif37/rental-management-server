@@ -3,6 +3,22 @@ import Feedback, { IFeedback } from '../models/feedback.model';
 import Property from '../models/property.model';
 import User, { UserDocument } from '../models/user.model';
 import Booking from '../models/booking.model';
+import { supportedLanguages } from '../utility/translation';
+import OpenAI from "openai";
+import { config as dotenvConfig } from 'dotenv';
+
+dotenvConfig();
+
+export interface Feedback {
+    _id: string;
+    property: string;
+    user: string | null;
+    rating: number;
+    comment: string;
+    __v: number;
+    createdAt: string;
+    updatedAt: string;
+}
 
 export const createFeedback = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -52,4 +68,61 @@ export const getFeedbacksForProperty = async (req: Request, res: Response, next:
     } catch (error) {
         next(error);
     }
+};
+
+export const translateFeedbacks = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { feedbacks, lng }: { feedbacks: Feedback[], lng: string } = req.body;
+
+        if (!feedbacks || !Array.isArray(feedbacks)) return res.status(400).json({ success: false, error: 'Invalid feedbacks format' });
+        if (!lng) return res.status(400).json({ success: false, error: 'Language parameter is required' });
+
+        let translatedFeedbacks: Feedback[] = [];
+
+        translatedFeedbacks = await Promise.all(feedbacks.map((feedback) => translateFeedback(feedback, lng)));
+
+        res.status(200).json({ success: true, translatedFeedbacks });
+    } catch (error) {
+        res.status(500).json({ success: false, error: `Failed to translate feedbacks ${error}` });
+    }
+};
+
+const translateFeedback = async (feedback: Feedback, targetLang: string): Promise<Feedback> => {
+    let translatedComment: string = '';
+
+    let openai: OpenAI;
+    try {
+        openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY // This is the default and can be omitted
+        });
+    } catch (error) {
+        console.error("Failed to initialize OpenAI API");
+        return feedback;
+    }
+
+    const params: OpenAI.Chat.ChatCompletionCreateParams = {
+        messages: [
+            { role: 'system', content: `You are a helpful assistant that translates text into ${supportedLanguages[targetLang]} Language and returns the translated text.` },
+            { role: 'user', content: `Translate the following text to ${supportedLanguages[targetLang]} Language:\n\n${feedback.comment}` },
+        ],
+        model: 'gpt-3.5-turbo',
+    };
+
+    let chatCompletion: OpenAI.Chat.ChatCompletion;
+    try {
+        chatCompletion = await openai.chat.completions.create(params);
+    } catch (error) {
+        console.error("Failed to translate Feedback with OpenAI API");
+        return feedback;
+    }
+
+    try {
+        translatedComment = chatCompletion.choices[0].message.content !== null ? chatCompletion.choices[0].message.content : "";
+    } catch (error) {
+        console.error("Failed to parses translated Feedback");
+        return feedback;
+    }
+
+    const translatedFeedback: Feedback = translatedComment !== "" ? { ...feedback, comment: translatedComment } : feedback;
+    return translatedFeedback;
 };

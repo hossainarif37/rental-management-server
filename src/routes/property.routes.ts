@@ -1,6 +1,7 @@
 const express = require('express');
-import { createFeedback, getFeedbacksForProperty } from '../controllers/feedback.controller';
-import { createProperty, getProperties, getSingleProperty, getPropertiesByUser, updateProperty, deleteProperty } from '../controllers/property.controller';
+import { createFeedback, getFeedbacksForProperty, translateFeedbacks } from '../controllers/feedback.controller';
+import { createProperty, getProperties, getSingleProperty, getPropertiesByUser, 
+         updateProperty, deleteProperty, translateProperties } from '../controllers/property.controller';
 import { checkSecureUser } from '../middleware/authentication';
 
 const router = express.Router();
@@ -16,7 +17,7 @@ router
     * @returns {object} - Status and message indicating the property was created successfully
     */
     .post('/', checkSecureUser, createProperty)
-
+    
     // Get All Properties
     /**
     * @route GET /api/properties
@@ -26,6 +27,16 @@ router
     * @returns {object} - Status and an array of properties
     */
     .get('/', getProperties)
+
+    // Translate All Properties
+    /**
+    * @route POST /api/properties/translateProperties
+    * @description Translates all properties.
+    * @access Public
+    *   
+    * @returns {object} - Status and an array of properties
+    */
+    .post('/translateProperties', translateProperties)
 
     // Get a Single Property by Property ID
     /**
@@ -86,5 +97,7 @@ router
     .post('/feedback', checkSecureUser, createFeedback)
 
     .get('/:propertyId/feedbacks', getFeedbacksForProperty)
+
+    .post('/translateFeedbacks', translateFeedbacks);
 
 module.exports = router;
